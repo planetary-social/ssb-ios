@@ -1,5 +1,5 @@
 //
-//  Statistics.swift
+//  RepoStatus.swift
 //  
 //
 //  Created by Martin Dutra on 9/1/22.
@@ -7,7 +7,7 @@
 
 import Foundation
 
-public struct Statistics: Decodable {
+public struct RepoStatus: Decodable {
 
     public var messages: UInt
 

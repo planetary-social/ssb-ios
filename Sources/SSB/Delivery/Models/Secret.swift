@@ -14,6 +14,10 @@ public struct Secret: Codable {
     var `private`: String
     var `public`: String
 
+    public var identity: String {
+        return id
+    }
+
     init?(from string: String) {
         guard let data = string.data(using: .utf8) else { return nil }
         guard let secret = try? JSONDecoder().decode(Secret.self, from: data) else { return nil }

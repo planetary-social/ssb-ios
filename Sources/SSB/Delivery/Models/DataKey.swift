@@ -31,7 +31,7 @@ public class DataKey {
         self.init(base64: data.base64EncodedString())
     }
 
-    func hexEncodedString() -> String {
+    public func hexEncodedString() -> String {
         let bytes = self.data
         let hexDigits = Array("0123456789abcdef".utf16)
         var hexChars = [UTF16.CodeUnit]()

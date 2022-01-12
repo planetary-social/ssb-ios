@@ -52,6 +52,31 @@ public class SSB {
         return UInt(ssbOpenConnections())
     }
 
+    public func openConnectionList() -> [(String, Key)] {
+        var open: [(String, Key)] = []
+        if let status = try? self.status() {
+            for p in  status.Peers {
+                // split of multiserver addr format
+                // ex: net:1.2.3.4:8008~shs:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+                if !p.Addr.hasPrefix("net:") {
+                    continue
+                }
+
+                let hostWithPubkey = p.Addr.dropFirst(4)
+                guard let startOfPubKey = hostWithPubkey.firstIndex(of: "~") else {
+                    continue
+                }
+
+                let host = hostWithPubkey[..<startOfPubKey]
+                let keyB64Start = hostWithPubkey.index(startOfPubKey, offsetBy: 5) // ~shs:
+                let pubkey = hostWithPubkey[keyB64Start...]
+
+                open.append((String(host), Key(String(pubkey))))
+            }
+        }
+        return open
+    }
+
     public func createSecret() throws -> Secret? {
         guard let kp = ssbGenKey() else {
             throw SSBError.unexpectedFault("createSecret failed")
@@ -124,14 +149,14 @@ public class SSB {
         return worked
     }
 
-    public func statistics() throws -> Statistics {
+    public func statistics() throws -> RepoStatus {
         guard let counts = ssbRepoStats() else {
             throw SSBError.unexpectedFault("failed to get repo counts")
         }
         let countData = String(cString: counts).data(using: .utf8)!
         free(counts)
         let dec = JSONDecoder()
-        return try dec.decode(Statistics.self, from: countData)
+        return try dec.decode(RepoStatus.self, from: countData)
     }
 
     public func fsck(mode: FSCKMode, progressHandler: @escaping CFSCKProgressCallback) -> Bool {
@@ -333,17 +358,9 @@ public class SSB {
 
     // MARK: Publish
 
-    public func publish<T: Encodable>(content: T) throws -> Key? {
-        var contentStr: String = ""
-        do {
-            let cData = try JSONEncoder().encode(content)
-            contentStr = String(data: cData, encoding: .utf8) ?? "]},invalid]-warning:invalid content"
-        } catch {
-            throw SSBError.duringProcessing("publish: failed to write content", error)
-        }
-
+    public func publish(content: String) throws -> Key? {
         var key: Key? = nil
-        contentStr.withGoString {
+        content.withGoString {
             if let cRef = ssbPublish($0) {
                 let newRef = String(cString: cRef)
                 free(cRef)
@@ -353,4 +370,13 @@ public class SSB {
         return key
     }
 
+    // MARK: Redeem invites
+
+    public func acceptInvite(token: String) -> Bool {
+        var worked = false
+        token.withGoString { goStr in
+            worked = ssbInviteAccept(goStr)
+        }
+        return worked
+    }
 }
