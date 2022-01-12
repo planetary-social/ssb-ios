@@ -136,9 +136,8 @@ final class BotTests: XCTestCase {
 
     @discardableResult
     private func afterPublishing() -> Key? {
-        let content = Content(string: "Hello World")
         do {
-            return try ssb.publish(content: content)
+            return try ssb.publish(content: "{\"content\":\"Hello World\"}")
         } catch {
             XCTFail(error.localizedDescription)
             return nil
