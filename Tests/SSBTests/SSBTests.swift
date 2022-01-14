@@ -100,17 +100,6 @@ final class BotTests: XCTestCase {
         ssb = SSB()
     }
 
-    private lazy var notifyBlobReceived: CBlobsNotifyCallback = {
-        numberOfBytes, ref in
-        return true
-    }
-
-    private lazy var notifyNewBearerToken: CPlanetaryBearerTokenCallback = {
-        cstr, expires in
-
-        return
-    }
-
     private func givenASecret() {
         secret = Secret(from: """
         {"curve":"ed25519","id":"@shwQGai09Tv+Pjbgde6lmhQhc34NURtP2iwnI0xsKtQ=.ggfeed-v1","private":"RdUdi8VQFb38R3Tyv9/iWZwRmCy1L1GfbR6JVrTLHkKyHBAZqLT1O/4+NuB17qWaFCFzfg1RG0/aLCcjTGwq1A==.ed25519","public":"shwQGai09Tv+Pjbgde6lmhQhc34NURtP2iwnI0xsKtQ=.ed25519"}
@@ -130,8 +119,7 @@ final class BotTests: XCTestCase {
                          secret: secret,
                          path: repoPath,
                          port: 0,
-                         blobReceivedHandler: notifyBlobReceived,
-                         newBearerTokenHandler: notifyNewBearerToken)
+                         servicePubs: [])
     }
 
     @discardableResult
