@@ -8,15 +8,6 @@
 import Foundation
 import GoSSB
 
-// get's called with the size and the hash (might return a bool just as a demo of passing data back)
-public typealias CBlobsNotifyCallback = @convention(c) (Int64, UnsafePointer<Int8>?) -> Bool
-
-// get's called with the messages left to process
-public typealias CFSCKProgressCallback = @convention(c) (Float64, UnsafePointer<Int8>?) -> Void
-
-// get's called with a token and an expiry date as unix timestamp
-public typealias CPlanetaryBearerTokenCallback = @convention(c) (UnsafePointer<Int8>?, Int64) -> Void
-
 public class SSB {
 
     public static let shared = SSB()
@@ -31,11 +22,46 @@ public class SSB {
                                    attributes: .concurrent,
                                    autoreleaseFrequency: .workItem,
                                    target: nil)
+        NotificationCenter.ssb.addObserver(forName: Notification.Name("did_receive_blob"),
+                                            object: nil,
+                                            queue: OperationQueue.current) { [weak self] notification in
+            guard let key = notification.userInfo?["key"] as? Key else {
+                return
+            }
+            self?.didReceiveBlobHandler?(key)
+        }
+        NotificationCenter.ssb.addObserver(forName: Notification.Name("new_bearer_token"),
+                                            object: nil,
+                                            queue: OperationQueue.current) { [weak self] notification in
+            guard let token = notification.userInfo?["token"] as? String else {
+                return
+            }
+            guard let expires = notification.userInfo?["expires"] as? Date else {
+                return
+            }
+            self?.didUpdateBearerToken?(token, expires)
+
+        }
+        NotificationCenter.ssb.addObserver(forName: Notification.Name("update_fsck_repair"),
+                                            object: nil,
+                                            queue: OperationQueue.current) { [weak self] notification in
+            guard let percent = notification.userInfo?["percent"] as? Double else {
+                return
+            }
+            guard let remainingTime = notification.userInfo?["status"] as? String else {
+                return
+            }
+            self?.didUpdateFSCKRepair?(percent, remainingTime)
+        }
     }
 
     public init(queue: DispatchQueue) {
         self.queue = queue
     }
+
+    public var didReceiveBlobHandler: ((Key) -> Void)? = nil
+    public var didUpdateBearerToken: ((String, Date) -> Void)? = nil
+    public var didUpdateFSCKRepair: ((Double, String) -> Void)? = nil
 
     public var version: String {
         guard let v = ssbVersion() else {
@@ -86,6 +112,8 @@ public class SSB {
         return secret
     }
 
+    /// blobReceivedHandler: gets called with the Key of the blob received
+    /// newBearerTokenHandler: get's called with a token and an expiry date as unix timestamp
     public func start(network: DataKey,
                       hmacKey: DataKey? = nil,
                       secret: Secret,
@@ -93,9 +121,31 @@ public class SSB {
                       port: Int = 8000,
                       hops: UInt = 1,
                       schemaVersion: UInt = 0,
-                      servicePubs: [Key]? = nil,
-                      blobReceivedHandler: @escaping CBlobsNotifyCallback,
-                      newBearerTokenHandler: @escaping CPlanetaryBearerTokenCallback) -> Bool {
+                      servicePubs: [Key]? = nil) -> Bool {
+
+        let cBlobReceivedHandler: @convention(c) (Int64, UnsafePointer<Int8>?) -> Bool = { _, ref in
+            guard let ref = ref else {
+                return false
+            }
+            let key = Key(String(cString: ref))
+            NotificationCenter.ssb.postSSBDidReceiveBlob(key: key)
+            return true
+        }
+
+        let cNewBearerTokenHandler: @convention(c) (UnsafePointer<Int8>?, Int64) -> Void = { cstr, expires in
+            let now = Int64(Date.init().timeIntervalSince1970)
+            guard expires - now > 0 else {
+                print("received expired token? \(expires)")
+                return
+            }
+            guard let token = cstr else {
+                return
+            }
+            let tok = String(cString: token)
+            let expiresWhen = Date(timeIntervalSince1970: Double(expires))
+            NotificationCenter.ssb.postSSBDidNotifyNewBearerToken(token: tok, expires: expiresWhen)
+        }
+
         let config = Config(
             AppKey: network.string,
             HMACKey: hmacKey == nil ? "" : hmacKey!.string,
@@ -119,7 +169,7 @@ public class SSB {
         var worked = false
         cfgStr.withGoString {
             cfgGoStr in
-            worked = ssbBotInit(cfgGoStr, blobReceivedHandler, newBearerTokenHandler)
+            worked = ssbBotInit(cfgGoStr, cBlobReceivedHandler, cNewBearerTokenHandler)
         }
         if worked {
             repoPath = config.Repo
@@ -159,8 +209,17 @@ public class SSB {
         return try dec.decode(RepoStatus.self, from: countData)
     }
 
-    public func fsck(mode: FSCKMode, progressHandler: @escaping CFSCKProgressCallback) -> Bool {
-        let ret = ssbOffsetFSCK(mode.rawValue, progressHandler)
+    /// progressHandler: get's called with the messages left to process
+    public func fsck(mode: FSCKMode) -> Bool {
+        let cProgressHandler: @convention(c) (Float64, UnsafePointer<Int8>?) -> Void = { percDone, cRemaining in
+            guard let cRemaining = cRemaining else {
+                return
+            }
+            let timeRemaining = String(cString: cRemaining)
+            let perc = percDone/100
+            NotificationCenter.ssb.postSSBDidUpdateFSCKRepair(percent: perc, status: timeRemaining)
+        }
+        let ret = ssbOffsetFSCK(mode.rawValue, cProgressHandler)
         return ret == 0
     }
 
@@ -378,5 +437,9 @@ public class SSB {
             worked = ssbInviteAccept(goStr)
         }
         return worked
+    }
+
+    public func dropIndexData() -> Bool {
+        return ssbDropIndexData()
     }
 }

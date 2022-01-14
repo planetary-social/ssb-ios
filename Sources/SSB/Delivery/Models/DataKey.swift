@@ -7,12 +7,12 @@
 
 import Foundation
 
-public class DataKey {
+open class DataKey {
 
-    var data: Data
-    var string: String
+    public var data: Data
+    public var string: String
 
-    init?(base64 string: String) {
+    public init?(base64 string: String) {
         guard let data = Data(base64Encoded: string, options: .ignoreUnknownCharacters) else { return nil }
         if data.count != 32 {
             #if DEBUG
@@ -27,7 +27,7 @@ public class DataKey {
     /// This seems like extra work, but the only way to ensure that
     /// the specified Data is base64 is to encode and decode again.
     /// So, leverage the other init() to do this.
-    convenience init?(base64 data: Data) {
+    public convenience init?(base64 data: Data) {
         self.init(base64: data.base64EncodedString())
     }
 
