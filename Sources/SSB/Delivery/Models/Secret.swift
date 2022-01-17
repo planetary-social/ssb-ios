@@ -10,7 +10,7 @@ import Foundation
 // TODO: We should get rid of this public modifier
 public struct Secret: Codable {
 
-    var curve: Algorithm
+    public var curve: Algorithm
     public var id: String
     public var `private`: String
     public var `public`: String

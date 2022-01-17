@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum Algorithm: String, Codable {
+public enum Algorithm: String, Codable {
 
     case sha256
     case ed25519
@@ -15,11 +15,11 @@ enum Algorithm: String, Codable {
     case ggfeedmsg = "ggmsg-v1"
     case unsupported
 
-    init() {
+    public init() {
         self = .unsupported
     }
 
-    init(fromRawValue: String) {
+    public init(fromRawValue: String) {
         self = Algorithm(rawValue: fromRawValue) ?? .unsupported
     }
     
